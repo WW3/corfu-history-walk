@@ -571,11 +571,13 @@ function loadMapsApi() {
   apiState = "loading";
   if (window.google?.maps) { onApiReady(); return; }
 
+  // With loading=async the script's load event fires before importLibrary exists;
+  // Google invokes the named callback once the API is actually ready.
+  window.__corfuMapsReady = onApiReady;
   const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=beta&loading=async&libraries=marker,routes&language=he&region=GR`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=beta&loading=async&callback=__corfuMapsReady&libraries=marker,routes&language=he&region=GR`;
   script.async = true;
   script.defer = true;
-  script.addEventListener("load", onApiReady);
   script.addEventListener("error", () => {
     apiState = "failed";
     if (mapWanted) onMapError();
