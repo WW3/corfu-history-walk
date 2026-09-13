@@ -607,6 +607,13 @@ if (!MOBILE_QUERY.matches) ensureMap();
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => { /* offline support is best-effort */ });
+    navigator.serviceWorker.register("./sw.js").then(() => {
+      // After a deploy the old worker serves the stale shell once; reload as soon as the new one takes over.
+      let hadController = Boolean(navigator.serviceWorker.controller);
+      navigator.serviceWorker.addEventListener("controllerchange", () => {
+        if (hadController) location.reload();
+        hadController = true;
+      });
+    }).catch(() => { /* offline support is best-effort */ });
   });
 }
