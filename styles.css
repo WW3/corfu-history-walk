@@ -409,3 +409,5 @@ footer p { margin: 0; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }
+
+.legs-total { margin: 0; font-weight: 700; color: var(--text); flex-basis: 100%; }

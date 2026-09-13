@@ -178,6 +178,9 @@ let map;
 let markers = [];
 let routeLine;
 let mapState = "idle"; // idle | loading | ready | failed | unavailable
+let apiState = "idle"; // Maps JS API script: idle | loading | ready | failed
+let mapWanted = false;
+const legsByMode = {}; // mode -> { legs: [{ minutes, meters }], path: [{ lat, lng }] }
 
 // ---------- DOM ----------
 const $ = (sel) => document.querySelector(sel);
@@ -230,6 +233,112 @@ function walkingMinutes(a, b) {
 }
 
 function latLng(stop) { return `${stop.position.lat},${stop.position.lng}`; }
+
+function estimatedLeg(from, to) {
+  return {
+    minutes: walkingMinutes(from, to),
+    meters: Math.round(distanceMeters(from.position, to.position) * 1.35),
+    estimated: true
+  };
+}
+
+// Real walking leg from the Routes API when available, otherwise the straight-line estimate.
+function getLeg(from, to) {
+  const i = stopIndex(from.id);
+  const leg = legsByMode[mode]?.legs?.[i];
+  if (leg && stopIndex(to.id) === i + 1) return leg;
+  return estimatedLeg(from, to);
+}
+
+function formatDistance(meters) {
+  return meters < 1000 ? `${Math.round(meters / 10) * 10} מ׳` : `${(meters / 1000).toFixed(1)} ק״מ`;
+}
+
+function legText(leg) {
+  return leg.estimated
+    ? `כ־${leg.minutes} דקות הליכה (הערכה)`
+    : `${leg.minutes} דקות · ${formatDistance(leg.meters)} הליכה`;
+}
+
+function routeTotals() {
+  const list = routeStops();
+  let minutes = 0, meters = 0, estimated = false;
+  for (let i = 0; i < list.length - 1; i++) {
+    const leg = getLeg(list[i], list[i + 1]);
+    minutes += leg.minutes; meters += leg.meters; estimated ||= Boolean(leg.estimated);
+  }
+  return { minutes, meters, estimated };
+}
+
+function legCacheKey(m) {
+  const ids = (m === "short" ? stops.filter(s => s.inShort) : stops).map(s => s.id).join(",");
+  return `corfuRouteLegs:${m}:${ids}`;
+}
+
+function toLatLngLiteral(p) {
+  return { lat: typeof p.lat === "function" ? p.lat() : p.lat, lng: typeof p.lng === "function" ? p.lng() : p.lng };
+}
+
+// One computeRoutes() call per route mode (<=7 intermediates keeps it in the Essentials tier).
+// Results are cached in localStorage so the last known legs also work offline.
+async function ensureRoutes() {
+  const m = mode;
+  if (legsByMode[m]) return;
+  const list = routeStops();
+
+  try {
+    const cached = JSON.parse(localStorage.getItem(legCacheKey(m)) || "null");
+    if (cached?.legs?.length === list.length - 1) {
+      legsByMode[m] = cached;
+      onLegsUpdated(m);
+      return;
+    }
+  } catch { /* ignore */ }
+
+  if (apiState !== "ready") return;
+
+  try {
+    const { Route } = await google.maps.importLibrary("routes");
+    const { routes } = await Route.computeRoutes({
+      origin: list[0].position,
+      destination: list[list.length - 1].position,
+      intermediates: list.slice(1, -1).map(stop => ({ location: stop.position })),
+      travelMode: "WALKING",
+      fields: ["legs", "path"]
+    });
+    const route = routes?.[0];
+    if (!route?.legs || route.legs.length !== list.length - 1) throw new Error("Unexpected route shape");
+
+    const data = {
+      legs: route.legs.map(leg => ({
+        minutes: Math.max(1, Math.round(Number(leg.durationMillis) / 60000)),
+        meters: Math.round(Number(leg.distanceMeters))
+      })),
+      path: (route.path || []).map(toLatLngLiteral)
+    };
+    legsByMode[m] = data;
+    try { localStorage.setItem(legCacheKey(m), JSON.stringify(data)); } catch { /* ignore */ }
+    onLegsUpdated(m);
+  } catch (error) {
+    console.warn("Routes API unavailable, using straight-line estimates.", error);
+  }
+}
+
+function onLegsUpdated(m) {
+  if (m !== mode) return;
+  refreshLegText();
+  renderLegs();
+  if (mapState === "ready") drawRoute();
+}
+
+// Update the walking-time line in place so focus inside the stop card is not disturbed.
+function refreshLegText() {
+  const list = routeStops();
+  const i = stopIndex(activeStopId);
+  const meta = detailEl.querySelector(".nav-next-meta");
+  if (!meta || i < 0 || !list[i + 1]) return;
+  meta.innerHTML = `${legText(getLeg(list[i], list[i + 1]))} · נפתח ב־${en("Google Maps")}`;
+}
 
 function legUrl(from, to) {
   const params = new URLSearchParams({ api: "1", destination: latLng(to), travelmode: "walking" });
@@ -309,7 +418,7 @@ function renderDetail(stop) {
   const nextAction = next
     ? `<a class="primary-link nav-next" href="${legUrl(stop, next)}" target="_blank" rel="noopener">
          <span class="nav-next-label">נווטו לתחנה ${index + 2} · ${next.name}</span>
-         <span class="nav-next-meta">כ־${walkingMinutes(stop, next)} דקות הליכה · נפתח ב־${en("Google Maps")}</span>
+         <span class="nav-next-meta">${legText(getLeg(stop, next))} · נפתח ב־${en("Google Maps")}</span>
        </a>`
     : `<p class="route-end">זו התחנה האחרונה במסלול${mode === "short" ? " המקוצר" : ""}. תודה שהלכתם איתנו.</p>`;
 
@@ -350,7 +459,9 @@ function renderDetail(stop) {
 
 function renderLegs() {
   const segments = routeSegments();
+  const totals = routeTotals();
   legsEl.innerHTML = `
+    <p class="legs-total">סה״כ הליכה${totals.estimated ? " (הערכה)" : ""}: כ־${totals.minutes} דקות · ${formatDistance(totals.meters)}</p>
     <p class="legs-title">המסלול ב־${en("Google Maps")}${segments.length > 1 ? " (בשני מקטעים)" : ""}:</p>
     <ul class="legs-list">
       ${segments.map((seg, i) => {
@@ -411,6 +522,7 @@ function setMode(nextMode) {
   selectStop(keep);
   announce(`${ROUTE_MODES[mode].label}: ${routeStops().length} תחנות, ${ROUTE_MODES[mode].hours}`);
   if (mapState === "ready") drawRoute();
+  ensureRoutes();
 }
 
 // ---------- map ----------
@@ -450,26 +562,47 @@ function showMapFallback(message) {
   if (isDevHost()) devForm.hidden = false;
 }
 
+// Loads the Maps JavaScript API script only (no map instance yet, so no map-load charge).
+// v=beta is required for the Route class (google.maps.routes).
+function loadMapsApi() {
+  if (apiState !== "idle") return;
+  const key = getKey();
+  if (!key) return;
+  apiState = "loading";
+  if (window.google?.maps) { onApiReady(); return; }
+
+  const script = document.createElement("script");
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=beta&libraries=marker,routes&language=he&region=GR`;
+  script.async = true;
+  script.defer = true;
+  script.addEventListener("load", onApiReady);
+  script.addEventListener("error", () => {
+    apiState = "failed";
+    if (mapWanted) onMapError();
+  });
+  document.head.appendChild(script);
+}
+
+function onApiReady() {
+  apiState = "ready";
+  // Bad/restricted key: surface the friendly fallback instead of Google's alert.
+  window.gm_authFailure = onMapError;
+  ensureRoutes();
+  if (mapWanted || isMapVisible()) ensureMap();
+}
+
 function ensureMap() {
   if (mapState !== "idle") return;
-  const key = getKey();
-  if (!key) {
+  if (!getKey()) {
     mapState = "unavailable";
     showMapFallback("המפה האינטראקטיבית אינה זמינה כרגע. רשימת התחנות וההסברים זמינים כרגיל.");
     return;
   }
+  mapWanted = true;
+  if (apiState === "failed") { onMapError(); return; }
+  if (apiState !== "ready") { loadMapsApi(); return; }
   mapState = "loading";
-  if (window.google?.maps) {
-    initMap().catch(onMapError);
-    return;
-  }
-  const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=weekly&libraries=marker&language=he&region=GR`;
-  script.async = true;
-  script.defer = true;
-  script.addEventListener("load", () => initMap().catch(onMapError));
-  script.addEventListener("error", onMapError);
-  document.head.appendChild(script);
+  initMap().catch(onMapError);
 }
 
 function onMapError() {
@@ -491,9 +624,6 @@ async function initMap() {
     gestureHandling: "cooperative"
   });
 
-  // Silently swallow auth failures (bad/restricted key) into the friendly fallback.
-  window.gm_authFailure = onMapError;
-
   mapState = "ready";
   mapFallback.hidden = true;
   drawRoute();
@@ -507,8 +637,9 @@ function drawRoute() {
   markers.forEach(m => { m.map = null; });
   routeLine?.setMap(null);
 
+  const realPath = legsByMode[mode]?.path;
   routeLine = new google.maps.Polyline({
-    path: list.map(s => s.position),
+    path: realPath?.length ? realPath : list.map(s => s.position),
     geodesic: true,
     strokeColor: "#0b66b2",
     strokeOpacity: 0.92,
@@ -588,6 +719,7 @@ devForm.addEventListener("submit", (event) => {
   if (!key) return;
   try { localStorage.setItem(STORAGE_KEY, key); } catch { /* ignore */ }
   mapState = "idle";
+  apiState = "idle";
   mapFallback.hidden = true;
   ensureMap();
 });
@@ -603,7 +735,8 @@ renderStops();
 renderLegs();
 selectStop(routeStops()[0].id);
 if (isDevHost()) devForm.hidden = false;
-if (!MOBILE_QUERY.matches) ensureMap();
+ensureRoutes(); // cached legs, if any, apply immediately
+if (getKey()) loadMapsApi(); else if (!MOBILE_QUERY.matches) ensureMap();
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   window.addEventListener("load", () => {
