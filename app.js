@@ -255,8 +255,19 @@ routeLink.href = buildGoogleMapsRouteUrl();
 renderStops();
 selectStop(stops[0].id, false);
 
-const savedKey = localStorage.getItem("corfuGoogleMapsKey");
-if (savedKey) {
-  apiInput.value = savedKey;
-  loadGoogleMaps(savedKey);
+function getEmbeddedKey() {
+  const key = window.CORFU_CONFIG?.googleMapsApiKey;
+  if (!key || key.startsWith("__")) return "";
+  return key.trim();
+}
+
+const embeddedKey = getEmbeddedKey();
+if (embeddedKey) {
+  loadGoogleMaps(embeddedKey);
+} else {
+  const savedKey = localStorage.getItem("corfuGoogleMapsKey");
+  if (savedKey) {
+    apiInput.value = savedKey;
+    loadGoogleMaps(savedKey);
+  }
 }
