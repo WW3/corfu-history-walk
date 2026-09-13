@@ -270,9 +270,23 @@ function routeTotals() {
   return { minutes, meters, estimated };
 }
 
+const LEG_CACHE_PREFIX = "corfuRouteLegs:";
+
+// Key includes ids AND coordinates, so moving a stop invalidates cached legs automatically.
 function legCacheKey(m) {
-  const ids = (m === "short" ? stops.filter(s => s.inShort) : stops).map(s => s.id).join(",");
-  return `corfuRouteLegs:${m}:${ids}`;
+  const list = m === "short" ? stops.filter(s => s.inShort) : stops;
+  const fingerprint = list.map(s => `${s.id}:${s.position.lat},${s.position.lng}`).join("|");
+  return `${LEG_CACHE_PREFIX}v1:${m}:${fingerprint}`;
+}
+
+// Drop cached legs whose key no longer matches any current route (old coordinates / stop lists).
+function pruneLegCache() {
+  const valid = new Set(Object.keys(ROUTE_MODES).map(legCacheKey));
+  try {
+    Object.keys(localStorage)
+      .filter(k => k.startsWith(LEG_CACHE_PREFIX) && !valid.has(k))
+      .forEach(k => localStorage.removeItem(k));
+  } catch { /* ignore */ }
 }
 
 function toLatLngLiteral(p) {
@@ -738,6 +752,7 @@ renderStops();
 renderLegs();
 selectStop(routeStops()[0].id);
 if (isDevHost()) devForm.hidden = false;
+pruneLegCache();
 ensureRoutes(); // cached legs, if any, apply immediately
 if (getKey()) loadMapsApi(); else if (!MOBILE_QUERY.matches) ensureMap();
 
