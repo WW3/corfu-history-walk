@@ -572,7 +572,7 @@ function loadMapsApi() {
   if (window.google?.maps) { onApiReady(); return; }
 
   const script = document.createElement("script");
-  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=beta&libraries=marker,routes&language=he&region=GR`;
+  script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&v=beta&loading=async&libraries=marker,routes&language=he&region=GR`;
   script.async = true;
   script.defer = true;
   script.addEventListener("load", onApiReady);
