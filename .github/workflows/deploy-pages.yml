@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inject Google Maps API key
+      - name: Inject Google Maps API key and build id
         env:
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: |
@@ -32,6 +32,8 @@ jobs:
           import os, pathlib
           p = pathlib.Path("config.js")
           p.write_text(p.read_text().replace("__GOOGLE_MAPS_API_KEY__", os.environ.get("GOOGLE_MAPS_API_KEY", "")))
+          sw = pathlib.Path("sw.js")
+          sw.write_text(sw.read_text().replace("__BUILD_ID__", os.environ.get("GITHUB_SHA", "dev")[:12]))
           PY
 
       - uses: actions/configure-pages@v5

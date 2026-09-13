@@ -2,79 +2,105 @@
 <html lang="he" dir="rtl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
   <meta name="theme-color" content="#0b4b77">
+  <meta name="description" content="סיור היסטורי עצמאי בעיר העתיקה של קורפו: ונציה, צרפת, בריטניה והמצודה העתיקה. תשע תחנות עם הסברים, ניווט לתחנה הבאה ומסלול מקוצר.">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="סיור קורפו">
   <title>סיור היסטורי בעיר העתיקה של קורפו</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon-192.png" type="image/png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <a class="skip-link" href="#tour-stops">דלג לרשימת התחנות</a>
+  <a class="skip-link" href="#stop-detail">דלג לתחנה הנוכחית</a>
+  <a class="skip-link" href="#tour-stops-heading">דלג לרשימת התחנות</a>
 
   <header class="site-header">
-    <div>
+    <div class="brand">
       <h1>סיור היסטורי בעיר העתיקה של קורפו</h1>
-      <p>כ־3.5 שעות · העיר הוונציאנית, הכנסיות והמצודה העתיקה</p>
+      <p id="route-summary">כ־4–4.5 שעות · 9 תחנות</p>
     </div>
-    <button id="show-all" class="secondary-button" type="button">הצג את כל המסלול</button>
+    <div id="route-mode" class="route-mode" role="group" aria-label="בחירת מסלול">
+      <button type="button" data-mode="full" aria-pressed="true">
+        <span class="mode-label">המסלול המלא</span>
+        <span class="mode-meta">9 תחנות · כ־4–4.5 שעות</span>
+      </button>
+      <button type="button" data-mode="short" aria-pressed="false">
+        <span class="mode-label">מסלול מקוצר</span>
+        <span class="mode-meta">5 תחנות · כ־2–2.5 שעות</span>
+      </button>
+    </div>
   </header>
 
-  <main class="app-shell">
-    <section class="map-column" aria-labelledby="map-heading">
-      <h2 id="map-heading" class="visually-hidden">מפת המסלול</h2>
-      <div id="map-wrap">
-        <div id="map" role="region" aria-label="מפת Google Maps של מסלול הסיור בקורפו"></div>
+  <main id="main" class="app-shell">
+    <section id="stop-detail" class="stop-detail" tabindex="-1" aria-labelledby="stop-heading">
+      <h2 id="stop-heading">התחנה הנוכחית</h2>
+      <p class="placeholder-copy">טוען את הסיור…</p>
+    </section>
 
-        <div id="map-setup" class="map-setup">
-          <div class="map-setup-card">
-            <h2>חיבור ל־Google Maps</h2>
-            <p>
-              כדי להציג את המפה האינטראקטיבית יש להזין Google Maps JavaScript API key.
-              המפתח נשמר רק בדפדפן המקומי.
-            </p>
-            <form id="api-key-form">
-              <label for="api-key">Google Maps API key</label>
-              <div class="key-row">
-                <input id="api-key" name="api-key" type="password" autocomplete="off" spellcheck="false">
-                <button type="submit">טען מפה</button>
-              </div>
-            </form>
-            <p class="setup-note">
-              גם בלי מפתח אפשר להשתמש ברשימת התחנות ובהסברים, ולפתוח את המסלול ישירות ב־Google Maps.
-            </p>
-          </div>
-        </div>
+    <section id="map-column" class="map-column" aria-labelledby="map-heading">
+      <div class="map-header">
+        <h2 id="map-heading">מפת המסלול</h2>
+        <button id="map-toggle" class="secondary-button mobile-only" type="button" aria-expanded="false" aria-controls="map-panel">הצג מפה</button>
       </div>
 
-      <div class="map-actions">
-        <a id="open-google-route" class="primary-link" target="_blank" rel="noopener">
-          פתח את המסלול ב־Google Maps
-        </a>
-        <p id="route-summary">9 תחנות · כ־3.5 שעות · קושי קל–בינוני</p>
+      <div id="map-panel" class="map-panel">
+        <div id="map-wrap">
+          <div id="map" role="region" aria-label="מפת Google Maps של מסלול הסיור בקורפו"></div>
+
+          <div id="map-fallback" class="map-fallback" hidden>
+            <div class="map-fallback-card">
+              <p id="map-fallback-text">המפה האינטראקטיבית אינה זמינה כרגע. רשימת התחנות וההסברים זמינים כרגיל.</p>
+              <a id="map-fallback-link" class="primary-link" href="#" target="_blank" rel="noopener">פתחו ניווט לתחנה הבאה ב־Google Maps</a>
+
+              <form id="api-key-form" class="dev-form" hidden>
+                <label for="api-key">מפתח Google Maps לפיתוח מקומי</label>
+                <div class="key-row">
+                  <input id="api-key" name="api-key" type="password" autocomplete="off" spellcheck="false">
+                  <button type="submit">טען מפה</button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+
+        <div class="map-actions">
+          <button id="show-all" class="secondary-button" type="button">הצג את כל המסלול</button>
+          <div id="route-legs" class="route-legs"></div>
+        </div>
       </div>
     </section>
 
-    <aside class="tour-column" aria-labelledby="tour-stops-heading">
+    <section class="tour-column" aria-labelledby="tour-stops-heading">
       <div class="tour-heading">
-        <h2 id="tour-stops-heading">תחנות הסיור</h2>
-        <p>בחרו תחנה כדי לקרוא את ההסבר ולהתמקד בה במפה.</p>
+        <h2 id="tour-stops-heading" tabindex="-1">תחנות הסיור</h2>
+        <p>בחרו תחנה כדי לקרוא את ההסבר ולנווט אליה.</p>
       </div>
-
       <ol id="tour-stops" class="stop-list"></ol>
-
-      <article id="stop-detail" class="stop-detail" tabindex="-1" aria-live="polite">
-        <p class="placeholder-copy">בחרו תחנה מהרשימה.</p>
-      </article>
-    </aside>
+    </section>
   </main>
+
+  <p id="status" class="visually-hidden" role="status"></p>
+
+  <dialog id="image-dialog" class="image-dialog" aria-labelledby="image-dialog-title">
+    <div class="image-dialog-bar">
+      <h2 id="image-dialog-title"></h2>
+      <button type="button" class="secondary-button" data-close>סגור</button>
+    </div>
+    <img src="" alt="">
+  </dialog>
 
   <footer>
     <p>
-      המסלול מיועד לסיור עצמי. בתוך ה־Old Fortress יש מדרגות, אבנים לא אחידות ומקטעים תלולים.
-      מומלץ לבדוק שעות פתיחה עדכניות ביום הביקור.
+      המסלול מיועד לסיור עצמי. בתוך המצודה העתיקה יש מדרגות, אבנים לא אחידות ומקטעים תלולים.
+      מומלץ לבדוק שעות פתיחה עדכניות ביום הביקור. זמני ההליכה הם הערכה בלבד.
     </p>
   </footer>
 
   <script src="config.js"></script>
+  <script src="images.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
