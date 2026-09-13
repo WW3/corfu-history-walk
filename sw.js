@@ -23,7 +23,10 @@ const SHELL = [
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(SHELL_CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting())
+    caches.open(SHELL_CACHE)
+      // Bypass the browser HTTP cache (GitHub Pages sends max-age=600) so a new build never precaches stale files.
+      .then(cache => cache.addAll(SHELL.map(url => new Request(url, { cache: "reload" }))))
+      .then(() => self.skipWaiting())
   );
 });
 
