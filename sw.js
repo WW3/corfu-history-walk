@@ -3,6 +3,7 @@
    cache tour photos on first use, never touch Google Maps requests. */
 
 const BUILD = "__BUILD_ID__"; // replaced with the commit SHA by the deploy workflow
+const IS_DEV = BUILD.startsWith("__");
 const SHELL_CACHE = `corfu-walk-shell-${BUILD}`;
 const IMAGE_CACHE = "corfu-walk-images-v1";
 
@@ -44,7 +45,8 @@ self.addEventListener("fetch", (event) => {
   if (/(^|\.)(googleapis|gstatic|google)\.com$/.test(url.hostname)) return;
 
   if (url.origin === self.location.origin) {
-    event.respondWith(cacheFirst(request, SHELL_CACHE));
+    // Local development (placeholder build id): always prefer fresh files.
+    event.respondWith(IS_DEV ? networkFirst(request, SHELL_CACHE) : cacheFirst(request, SHELL_CACHE));
     return;
   }
 
@@ -66,6 +68,19 @@ async function cacheFirst(request, cacheName) {
       const shell = await cache.match("./index.html");
       if (shell) return shell;
     }
+    throw error;
+  }
+}
+
+async function networkFirst(request, cacheName) {
+  const cache = await caches.open(cacheName);
+  try {
+    const response = await fetch(request);
+    if (response.ok) cache.put(request, response.clone());
+    return response;
+  } catch (error) {
+    const cached = await cache.match(request, { ignoreSearch: true });
+    if (cached) return cached;
     throw error;
   }
 }

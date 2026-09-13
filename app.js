@@ -316,7 +316,7 @@ function renderDetail(stop) {
   const figure = img ? `
     <figure class="stop-figure">
       <button type="button" class="figure-button" data-enlarge="${stop.id}" aria-label="הגדלת התמונה: ${escapeHtml(img.alt)}">
-        <img src="${img.thumb800}" alt="${escapeHtml(img.alt)}" width="800" height="${Math.round(800 * img.height / img.width)}" loading="lazy" decoding="async">
+        <img src="${img.thumb800}" alt="${escapeHtml(img.alt)}" width="960" height="${Math.round(960 * img.height / img.width)}" loading="lazy" decoding="async">
       </button>
       <figcaption>${en(`Photo: <a href="${img.descriptionUrl}" target="_blank" rel="noopener">${escapeHtml(img.author)}</a>, <a href="${img.licenseUrl}" target="_blank" rel="noopener">${escapeHtml(img.license)}</a>, via Wikimedia Commons`)}</figcaption>
     </figure>` : "";
@@ -541,7 +541,7 @@ function openImage(stopId) {
   const img = STOP_IMAGES[stopId];
   const stop = stops.find(s => s.id === stopId);
   if (!img || !dialog?.showModal) return;
-  dialog.querySelector("img").src = img.thumb800.replace("/800px-", "/1600px-");
+  dialog.querySelector("img").src = img.thumb800.replace("/960px-", "/1920px-");
   dialog.querySelector("img").alt = img.alt;
   dialog.querySelector("#image-dialog-title").textContent = stop.name;
   dialog.showModal();
