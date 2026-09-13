@@ -605,7 +605,8 @@ function ensureMap() {
   initMap().catch(onMapError);
 }
 
-function onMapError() {
+function onMapError(error) {
+  if (error) console.warn("Map failed to initialise:", error);
   mapState = "failed";
   showMapFallback("לא הצלחנו לטעון את המפה האינטראקטיבית. רשימת התחנות זמינה כרגיל.");
 }
