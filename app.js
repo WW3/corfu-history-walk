@@ -488,7 +488,7 @@ async function initMap() {
     streetViewControl: false,
     mapTypeControl: true,
     fullscreenControl: true,
-    gestureHandling: "greedy"
+    gestureHandling: "cooperative"
   });
 
   // Silently swallow auth failures (bad/restricted key) into the friendly fallback.
