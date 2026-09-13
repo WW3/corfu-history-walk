@@ -250,6 +250,11 @@ function getLeg(from, to) {
   return estimatedLeg(from, to);
 }
 
+// Direct leg from the stop before an optional stop to the stop after it (Routes result or estimate).
+function getSkipLeg(prev, optional, next) {
+  return legsByMode[mode]?.skips?.[optional.id] || estimatedLeg(prev, next);
+}
+
 function formatDistance(meters) {
   return meters < 1000 ? `${Math.round(meters / 10) * 10} מ׳` : `${(meters / 1000).toFixed(1)} ק״מ`;
 }
@@ -276,7 +281,7 @@ const LEG_CACHE_PREFIX = "corfuRouteLegs:";
 function legCacheKey(m) {
   const list = m === "short" ? stops.filter(s => s.inShort) : stops;
   const fingerprint = list.map(s => `${s.id}:${s.position.lat},${s.position.lng}`).join("|");
-  return `${LEG_CACHE_PREFIX}v1:${m}:${fingerprint}`;
+  return `${LEG_CACHE_PREFIX}v2:${m}:${fingerprint}`;
 }
 
 // Drop cached legs whose key no longer matches any current route (old coordinates / stop lists).
@@ -328,8 +333,33 @@ async function ensureRoutes() {
         minutes: Math.max(1, Math.round(Number(leg.durationMillis) / 60000)),
         meters: Math.round(Number(leg.distanceMeters))
       })),
-      path: (route.path || []).map(toLatLngLiteral)
+      path: (route.path || []).map(toLatLngLiteral),
+      skips: {}
     };
+
+    // One small extra request per optional stop: the direct leg for travellers who skip it.
+    const optionalStops = list.filter((stop, i) => stop.optional && i > 0 && i < list.length - 1);
+    await Promise.all(optionalStops.map(async (optional) => {
+      const i = list.indexOf(optional);
+      try {
+        const direct = await Route.computeRoutes({
+          origin: list[i - 1].position,
+          destination: list[i + 1].position,
+          travelMode: "WALKING",
+          fields: ["legs"]
+        });
+        const leg = direct.routes?.[0]?.legs?.[0];
+        if (leg) {
+          data.skips[optional.id] = {
+            minutes: Math.max(1, Math.round(Number(leg.durationMillis) / 60000)),
+            meters: Math.round(Number(leg.distanceMeters))
+          };
+        }
+      } catch (error) {
+        console.warn(`Direct leg around ${optional.id} unavailable, using estimate.`, error);
+      }
+    }));
+
     legsByMode[m] = data;
     try { localStorage.setItem(legCacheKey(m), JSON.stringify(data)); } catch { /* ignore */ }
     onLegsUpdated(m);
@@ -352,6 +382,11 @@ function refreshLegText() {
   const meta = detailEl.querySelector(".nav-next-meta");
   if (!meta || i < 0 || !list[i + 1]) return;
   meta.innerHTML = `${legText(getLeg(list[i], list[i + 1]))} · נפתח ב־${en("Google Maps")}`;
+
+  const skipMeta = detailEl.querySelector(".nav-skip-meta");
+  if (skipMeta && list[i + 1].optional && list[i + 2]) {
+    skipMeta.textContent = legText(getSkipLeg(list[i], list[i + 1], list[i + 2]));
+  }
 }
 
 function legUrl(from, to) {
@@ -436,6 +471,14 @@ function renderDetail(stop) {
        </a>`
     : `<p class="route-end">זו התחנה האחרונה במסלול${mode === "short" ? " המקוצר" : ""}. תודה שהלכתם איתנו.</p>`;
 
+  const afterNext = list[index + 2];
+  const skipAction = next?.optional && afterNext
+    ? `<a class="secondary-link nav-skip" href="${legUrl(stop, afterNext)}" target="_blank" rel="noopener">
+         <span class="nav-skip-label">מדלגים על התחנה האופציונלית? נווטו ישירות לתחנה ${index + 3} · ${afterNext.name}</span>
+         <span class="nav-skip-meta">${legText(getSkipLeg(stop, next, afterNext))}</span>
+       </a>`
+    : "";
+
   const figure = img ? `
     <figure class="stop-figure">
       <button type="button" class="figure-button" data-enlarge="${stop.id}" aria-label="הגדלת התמונה: ${escapeHtml(img.alt)}">
@@ -459,6 +502,7 @@ function renderDetail(stop) {
     ${sources}
     <div class="stop-actions">
       ${nextAction}
+      ${skipAction}
       <div class="action-row">
         <button type="button" class="secondary-button" data-action="prev" ${prev ? "" : "disabled"}>התחנה הקודמת</button>
         <button type="button" class="secondary-button" data-action="next" ${next ? "" : "disabled"}>התחנה הבאה</button>
